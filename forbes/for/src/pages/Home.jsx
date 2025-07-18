@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const GOOGLE_SCRIPT_URL =
-  'https://script.google.com/macros/s/AKfycbzqUn-Y0ktte3Py_gB9XyP9mqsoTq-6j9rdkQd_KjOi7IHM2CQpUWzwYshwPQwU9IrY1Q/exec';
+  'https://script.google.com/macros/s/AKfycbzVXG0dBntKeOPMjsHBK748sna-aoTlQu4teTYcaTvEa05f6ECig_9Q2LhVE4ZLhrJX/exec';
 
 const Home = () => {
   const [customers, setCustomers] = useState([]);
@@ -34,10 +34,6 @@ const Home = () => {
     navigate(`/form/${encodedName}`);
   };
 
-  const handleNewCustomer = () => {
-    navigate('/form/new'); // navigate with `new` identifier
-  };
-
   const filteredCustomers = customers.filter(name =>
     name.toLowerCase().includes(search.toLowerCase())
   );
@@ -52,10 +48,6 @@ const Home = () => {
         onChange={(e) => setSearch(e.target.value)}
         style={styles.search}
       />
-
-      <button onClick={handleNewCustomer} style={styles.newCustomerButton}>
-        + New Customer
-      </button>
 
       {loading && <p>Loading...</p>}
       {error && <p style={{ color: 'red' }}>{error}</p>}
@@ -89,17 +81,6 @@ const styles = {
     fontSize: '1rem',
     borderRadius: '5px',
     border: '1px solid #ccc',
-  },
-  newCustomerButton: {
-    padding: '10px 15px',
-    marginBottom: '1.5rem',
-    backgroundColor: '#28a745',
-    color: 'white',
-    border: 'none',
-    borderRadius: '5px',
-    cursor: 'pointer',
-    fontWeight: 'bold',
-    width: '100%',
   },
   list: {
     listStyle: 'none',
