@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const GOOGLE_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbzwwDeQEjy9xVt5AjphNA7AMGNUnVfLxo0pmQj6WGLiGWOJAoG_lsnHwXgfHD8K7QMaVg/exec";
+  "https://script.google.com/macros/s/AKfycbzRFUIyK3DXM0SNx55-IV_S_GCvGfSdvVP8fkYexwQb_ItosfgRT9pBscN3i2RF0Gn2Sw/exec";
 
 const Home = () => {
   const [customers, setCustomers] = useState([]);
@@ -16,13 +16,14 @@ const Home = () => {
       try {
         const response = await fetch(GOOGLE_SCRIPT_URL);
         const data = await response.json();
-        const customerList = data
-          .map((entry) => entry["CUSTOMER NAME"])
-          .filter(Boolean);
+
+        const customerList = data.filter(
+          (entry) => entry["CUSTOMER NAME"] && entry["OA NUMBER"]
+        );
         setCustomers(customerList);
       } catch (err) {
-        console.error("Error fetching customer names:", err);
-        setError("Failed to fetch customer names.");
+        console.error("Error fetching customer data:", err);
+        setError("Failed to fetch customer data.");
       } finally {
         setLoading(false);
       }
@@ -36,8 +37,8 @@ const Home = () => {
     navigate(`/form/${encodedName}`);
   };
 
-  const filteredCustomers = customers.filter((name) =>
-    name.toLowerCase().includes(search.toLowerCase())
+  const filteredCustomers = customers.filter((entry) =>
+    entry["CUSTOMER NAME"].toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -55,13 +56,16 @@ const Home = () => {
       {error && <p style={{ color: "red" }}>{error}</p>}
 
       <ul style={styles.list}>
-        {filteredCustomers.map((name, index) => (
+        {filteredCustomers.map((entry, index) => (
           <li
             key={index}
             style={styles.listItem}
-            onClick={() => handleClick(name)}
+            onClick={() => handleClick(entry["CUSTOMER NAME"])}
           >
-            {name}
+            <strong>  OA No:{entry["OA NUMBER"]}</strong> <br />
+            <span style={{ fontSize: "0.9rem", color: "#555" }}>
+              {entry["CUSTOMER NAME"]}
+            </span>
           </li>
         ))}
       </ul>
