@@ -32,9 +32,9 @@ const Home = () => {
     fetchCustomers();
   }, []);
 
-  const handleClick = (name) => {
-    const encodedName = encodeURIComponent(name);
-    navigate(`/form/${encodedName}`);
+  const handleClick = (oaNumber) => {
+    const encodedOaNumber = encodeURIComponent(oaNumber);
+    navigate(`/form/${encodedOaNumber}`);
   };
 
   const filteredCustomers = customers.filter((entry) =>
@@ -75,7 +75,7 @@ const Home = () => {
             <li
               key={index}
               style={styles.listItem}
-              onClick={() => handleClick(entry["CUSTOMER NAME"])}
+              onClick={() => handleClick(entry["OA NUMBER"])}
             >
               <strong>OA No: {entry["OA NUMBER"]}</strong> <br />
               <span style={styles.customerName}>{entry["CUSTOMER NAME"]}</span>

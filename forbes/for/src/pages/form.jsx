@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
-const FETCH_URL = "https://script.google.com/macros/s/AKfycbyFlXybCSp6YVOrIclUiLnsxwcwi3OGyiEVBN2RbWw4NAUcQks3OLIrNvjZ8ttXBzWUgQ/exec";
-const POST_URL = "https://script.google.com/macros/s/AKfycbyrG8MEXOIOpIMMtcvnnfsWgsJvLPHP8fQ031OFfoboCBICxTjbKId6a-u6pEQsQ4EKuA/exec";
+const FETCH_URL = "https://script.google.com/macros/s/AKfycbxOD0gHGLoM1ttYf2T8rHAJX3bhVogQ7WzIKNkl5f8cM7gI9zQlnETFEjmcg8UQ1DRawA/exec";
+const POST_URL = "https://script.google.com/macros/s/AKfycbwKBco8_xDcQRXn_8Q6avWTSHHRieqstsRirWW0TK6B_q-Q4kbhakeqb3iRE7PqIqyxZQ/exec";
 
 const Form = () => {
-  const { name } = useParams();
+  const { oaNumber } = useParams();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({});
   const [loading, setLoading] = useState(true);
@@ -30,7 +30,7 @@ const Form = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch(`${FETCH_URL}?name=${encodeURIComponent(name)}`);
+        const res = await fetch(`${FETCH_URL}?oaNumber=${encodeURIComponent(oaNumber)}`);
         if (!res.ok) throw new Error("Network response was not ok");
         const data = await res.json();
         setFormData(data);
@@ -42,7 +42,7 @@ const Form = () => {
       }
     };
     fetchData();
-  }, [name]);
+  }, [oaNumber]);
 
   const handleChange = (e) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -104,7 +104,7 @@ const Form = () => {
           >
             &#8592; Back to List
           </button>
-          <h2 style={styles.title}>Edit Details for: {formData["CUSTOMER NAME"]}</h2>
+          <h2 style={styles.title}>Edit Details for OA: {formData["OA NUMBER"]}</h2>
         </div>
         
         <form onSubmit={handleSubmit} style={styles.form}>
