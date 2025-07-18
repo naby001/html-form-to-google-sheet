@@ -1,138 +1,74 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbzqUn-Y0ktte3Py_gB9XyP9mqsoTq-6j9rdkQd_KjOi7IHM2CQpUWzwYshwPQwU9IrY1Q/exec';
-
-const defaultFormData = {
-  "CUSTOMER NAME": '',
-  "OA NUMBER": '',
-  "BRANCH": '',
-  "TPH": '',
-  "QTY": '',
-  "PRES": '',
-  "BURNER": '',
-  "BLR NO": '',
-  "HYDRO PLAN": '',
-  "HYDRO ACTUAL": '',
-  "CASING PLAN": '',
-  "CASING ACTUAL": '',
-  "WELDING PLAN": '',
-  "WELDING ACTUAL": '',
-  "SHEETING PLAN": '',
-  "SHEETING ACTUAL": '',
-  "REFRACTORY PLAN": '',
-  "REFRACTORY ACTUAL": '',
-  "MOUNTING PLAN": '',
-  "MOUNTING ACTUAL": '',
-  "FINAL PAINTING PLAN": '',
-  "FINAL PAINTING ACTUAL": '',
-  "READINESS PLAN": '',
-  "READINESS ACTUAL": '',
-  "DISP.DT": '',
-  "REMARK": '',
-};
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyncgAR6ZbmlK9pE4LURb2gob0K44ahFPf7Ch0AZwH53E2QkFOTMw9TX2QyIdwFVqn6Gg/exec';
 
 const Form = () => {
   const { name } = useParams();
   const navigate = useNavigate();
-  const [formData, setFormData] = useState(defaultFormData);
-  const [status, setStatus] = useState('');
+  const [formData, setFormData] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [msg, setMsg] = useState('');
 
   useEffect(() => {
-    if (name !== 'new') {
-      fetch(API_URL)
-        .then(res => res.json())
-        .then(data => {
-          const match = data.find(entry => entry["CUSTOMER NAME"] === decodeURIComponent(name));
-          if (match) setFormData(match);
-        });
-    }
+    const fetchData = async () => {
+      try {
+        const res = await fetch(`${GOOGLE_SCRIPT_URL}?name=${encodeURIComponent(name)}`);
+        const data = await res.json();
+        setFormData(data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, [name]);
 
   const handleChange = (e) => {
-    setFormData(prev => ({
-      ...prev,
-      [e.target.name]: e.target.value
-    }));
+    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(API_URL, formData);
-      setStatus('✅ Data submitted successfully!');
+      const res = await fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify(formData),
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const text = await res.text();
+      setMsg(text);
       setTimeout(() => navigate('/'), 1500);
-    } catch (error) {
-      console.error(error);
-      setStatus('❌ Failed to submit.');
+    } catch (err) {
+      console.error(err);
+      setMsg("Failed to update");
     }
   };
 
+  if (loading) return <p>Loading...</p>;
+
   return (
-    <div style={styles.container}>
-      <h2 style={styles.heading}>
-        {name === 'new' ? 'Add New Customer' : `Edit: ${decodeURIComponent(name)}`}
-      </h2>
+    <div style={{ maxWidth: '700px', margin: 'auto', padding: '2rem' }}>
+      <h2>Edit Details for: {formData["CUSTOMER NAME"]}</h2>
       <form onSubmit={handleSubmit}>
         {Object.entries(formData).map(([key, value]) => (
-          <div key={key} style={styles.inputGroup}>
-            <label style={styles.label}>{key}</label>
+          <div key={key} style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', fontWeight: 'bold' }}>{key}</label>
             <input
               type="text"
               name={key}
               value={value}
               onChange={handleChange}
-              style={styles.input}
+              style={{ width: '100%', padding: '8px' }}
             />
           </div>
         ))}
-        <button type="submit" style={styles.button}>
-          💾 Save Changes
-        </button>
-        {status && <p style={{ marginTop: '1rem', color: 'green' }}>{status}</p>}
+        <button type="submit" style={{ padding: '10px 20px' }}>Update</button>
       </form>
+      {msg && <p>{msg}</p>}
     </div>
   );
-};
-
-const styles = {
-  container: {
-    maxWidth: '700px',
-    margin: 'auto',
-    padding: '2rem',
-    fontFamily: 'sans-serif',
-  },
-  heading: {
-    textAlign: 'center',
-    marginBottom: '2rem',
-  },
-  inputGroup: {
-    marginBottom: '1rem',
-  },
-  label: {
-    display: 'block',
-    fontWeight: 'bold',
-    marginBottom: '0.5rem',
-  },
-  input: {
-    width: '100%',
-    padding: '0.5rem',
-    fontSize: '1rem',
-    borderRadius: '5px',
-    border: '1px solid #ccc',
-  },
-  button: {
-    marginTop: '1.5rem',
-    width: '100%',
-    padding: '10px',
-    fontSize: '1rem',
-    backgroundColor: '#007BFF',
-    color: 'white',
-    border: 'none',
-    borderRadius: '5px',
-    cursor: 'pointer',
-  },
 };
 
 export default Form;
