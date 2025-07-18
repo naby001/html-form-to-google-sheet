@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 
-const GOOGLE_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbzRFUIyK3DXM0SNx55-IV_S_GCvGfSdvVP8fkYexwQb_ItosfgRT9pBscN3i2RF0Gn2Sw/exec";
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRFUIyK3DXM0SNx55-IV_S_GCvGfSdvVP8fkYexwQb_ItosfgRT9pBscN3i2RF0Gn2Sw/exec";
 
 const Home = () => {
   const [customers, setCustomers] = useState([]);
@@ -11,35 +10,67 @@ const Home = () => {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchCustomers = async () => {
-      try {
-        const response = await fetch(GOOGLE_SCRIPT_URL);
-        const data = await response.json();
-
-        const customerList = data.filter(
-          (entry) => entry["CUSTOMER NAME"] && entry["OA NUMBER"]
-        );
-        setCustomers(customerList);
-      } catch (err) {
-        console.error("Error fetching customer data:", err);
+  // Memoized fetch function
+  const fetchCustomers = useCallback(async () => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      
+      const response = await fetch(GOOGLE_SCRIPT_URL, {
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) throw new Error("Network response was not ok");
+      
+      const data = await response.json();
+      const customerList = data.filter(entry => entry["CUSTOMER NAME"] && entry["OA NUMBER"]);
+      
+      // Cache the data in localStorage
+      localStorage.setItem('cachedCustomers', JSON.stringify(customerList));
+      localStorage.setItem('lastFetchTime', Date.now());
+      
+      setCustomers(customerList);
+    } catch (err) {
+      console.error("Error fetching customer data:", err);
+      
+      // Try to use cached data if available
+      const cachedData = localStorage.getItem('cachedCustomers');
+      if (cachedData) {
+        setCustomers(JSON.parse(cachedData));
+        setError("Using cached data. " + (err.message || "Network error"));
+      } else {
         setError("Failed to fetch customer data. Please try again later.");
-      } finally {
-        setLoading(false);
       }
-    };
-
-    fetchCustomers();
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const handleClick = (oaNumber) => {
-    const encodedOaNumber = encodeURIComponent(oaNumber);
-    navigate(`/form/${encodedOaNumber}`);
-  };
+  useEffect(() => {
+    // Check if we have recent cached data (less than 5 minutes old)
+    const lastFetchTime = localStorage.getItem('lastFetchTime');
+    const cachedData = localStorage.getItem('cachedCustomers');
+    
+    if (cachedData && lastFetchTime && (Date.now() - lastFetchTime < 300000)) {
+      setCustomers(JSON.parse(cachedData));
+      setLoading(false);
+    }
+    
+    // Always try to fetch fresh data in background
+    fetchCustomers();
+  }, [fetchCustomers]);
 
-  const filteredCustomers = customers.filter((entry) =>
-    entry["CUSTOMER NAME"].toLowerCase().includes(search.toLowerCase())
-  );
+  const handleClick = useCallback((oaNumber) => {
+    navigate(`/form/${encodeURIComponent(oaNumber)}`);
+  }, [navigate]);
+
+  const filteredCustomers = React.useMemo(() => {
+    return customers.filter(entry => 
+      entry["CUSTOMER NAME"].toLowerCase().includes(search.toLowerCase())
+    );
+  }, [customers, search]);
 
   return (
     <div style={styles.container}>
@@ -73,7 +104,7 @@ const Home = () => {
         <ul style={styles.list}>
           {filteredCustomers.map((entry, index) => (
             <li
-              key={index}
+              key={`${entry["OA NUMBER"]}-${index}`}
               style={styles.listItem}
               onClick={() => handleClick(entry["OA NUMBER"])}
             >
@@ -86,6 +117,8 @@ const Home = () => {
     </div>
   );
 };
+
+// ... (keep your existing styles and animation code)
 
 const styles = {
   container: {

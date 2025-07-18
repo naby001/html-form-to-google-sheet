@@ -1,16 +1,45 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
 const FETCH_URL = "https://script.google.com/macros/s/AKfycbxOD0gHGLoM1ttYf2T8rHAJX3bhVogQ7WzIKNkl5f8cM7gI9zQlnETFEjmcg8UQ1DRawA/exec";
 const POST_URL = "https://script.google.com/macros/s/AKfycbwKBco8_xDcQRXn_8Q6avWTSHHRieqstsRirWW0TK6B_q-Q4kbhakeqb3iRE7PqIqyxZQ/exec";
+
+// Utility function to format dates for input fields
+const formatDateForInput = (dateString) => {
+  if (!dateString) return '';
+  
+  // Handle Excel serial dates (numbers)
+  if (typeof dateString === 'number') {
+    const date = new Date((dateString - 25569) * 86400 * 1000);
+    if (!isNaN(date.getTime())) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  }
+  
+  // Handle string dates
+  const date = new Date(dateString);
+  if (!isNaN(date.getTime())) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  // Return original if not a recognizable date
+  return dateString;
+};
 
 const Form = () => {
   const { oaNumber } = useParams();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({});
   const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState("");
+  const [msg, setMsg] = useState({ text: "", type: "" });
   const [error, setError] = useState("");
+  const [showToast, setShowToast] = useState(false);
 
   const readOnlyFields = [
     "OA NUMBER", "BRANCH", "CUSTOMER NAME", "TPH", "QTY", "PRES", "BURNER", "BLR NO"
@@ -27,25 +56,58 @@ const Form = () => {
     { plan: "READINESS PLAN", actual: "READINESS ACTUAL" }
   ];
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await fetch(`${FETCH_URL}?oaNumber=${encodeURIComponent(oaNumber)}`);
-        if (!res.ok) throw new Error("Network response was not ok");
-        const data = await res.json();
-        setFormData(data);
-      } catch (err) {
-        console.error("Error fetching form data:", err);
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+      const res = await fetch(`${FETCH_URL}?oaNumber=${encodeURIComponent(oaNumber)}`, {
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!res.ok) throw new Error("Network response was not ok");
+      
+      const data = await res.json();
+      
+      localStorage.setItem(`formData_${oaNumber}`, JSON.stringify(data));
+      localStorage.setItem(`lastFetch_${oaNumber}`, Date.now());
+      
+      setFormData(data);
+    } catch (err) {
+      console.error("Error fetching form data:", err);
+      
+      const cachedData = localStorage.getItem(`formData_${oaNumber}`);
+      const lastFetch = localStorage.getItem(`lastFetch_${oaNumber}`);
+      
+      if (cachedData && lastFetch && (Date.now() - lastFetch < 600000)) {
+        setFormData(JSON.parse(cachedData));
+        setError("Using cached data. " + (err.message || "Network error"));
+      } else {
         setError("Failed to load form data. Please try again.");
-      } finally {
-        setLoading(false);
       }
-    };
-    fetchData();
+    } finally {
+      setLoading(false);
+    }
   }, [oaNumber]);
 
+  useEffect(() => {
+    const cachedData = localStorage.getItem(`formData_${oaNumber}`);
+    const lastFetch = localStorage.getItem(`lastFetch_${oaNumber}`);
+    
+    if (cachedData && lastFetch && (Date.now() - lastFetch < 600000)) {
+      setFormData(JSON.parse(cachedData));
+      setLoading(false);
+    }
+    
+    fetchData();
+  }, [fetchData, oaNumber]);
+
   const handleChange = (e) => {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
@@ -53,23 +115,40 @@ const Form = () => {
     setLoading(true);
     try {
       const formBody = new URLSearchParams(formData).toString();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
       const res = await fetch(POST_URL, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: formBody,
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
+      
       const text = await res.text();
-      setMsg(text);
-      setTimeout(() => navigate("/"), 1500);
+      setMsg({ text: "Success: " + text, type: "success" });
+      setShowToast(true);
+      
+      localStorage.setItem(`formData_${oaNumber}`, JSON.stringify(formData));
+      localStorage.setItem(`lastFetch_${oaNumber}`, Date.now());
+      
+      setTimeout(() => {
+        setShowToast(false);
+        navigate("/");
+      }, 2000);
     } catch (err) {
       console.error("Error submitting form:", err);
-      setMsg("Failed to update. Please try again.");
+      setMsg({ text: "Error: Failed to update. Please try again.", type: "error" });
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading) {
+  if (loading && Object.keys(formData).length === 0) {
     return (
       <div style={styles.loadingContainer}>
         <div style={styles.spinner}></div>
@@ -78,7 +157,7 @@ const Form = () => {
     );
   }
 
-  if (error) {
+  if (error && Object.keys(formData).length === 0) {
     return (
       <div style={styles.errorContainer}>
         <div style={styles.errorIcon}>⚠️</div>
@@ -95,12 +174,22 @@ const Form = () => {
 
   return (
     <div style={styles.pageContainer}>
+      {showToast && (
+        <div style={{
+          ...styles.toast,
+          backgroundColor: msg.type === "success" ? "#4CAF50" : "#F44336"
+        }}>
+          {msg.text}
+        </div>
+      )}
+      
       <div style={styles.container}>
         <div style={styles.header}>
           <button
             type="button"
             style={styles.backButton}
             onClick={() => navigate(-1)}
+            disabled={loading}
           >
             &#8592; Back to List
           </button>
@@ -108,7 +197,6 @@ const Form = () => {
         </div>
         
         <form onSubmit={handleSubmit} style={styles.form}>
-          {/* Read-only fields */}
           <div style={styles.readOnlyGrid}>
             {readOnlyFields.map((key) => (
               formData[key] && (
@@ -117,7 +205,7 @@ const Form = () => {
                   <input
                     type="text"
                     name={key}
-                    value={formData[key]}
+                    value={formData[key] || ""}
                     style={styles.readOnlyInput}
                     readOnly
                   />
@@ -126,7 +214,6 @@ const Form = () => {
             ))}
           </div>
 
-          {/* Plan/Actual pairs with color coding */}
           <div style={styles.section}>
             <h3 style={styles.sectionTitle}>Progress Tracking</h3>
             <div style={styles.fieldPairsContainer}>
@@ -144,21 +231,23 @@ const Form = () => {
                     <div style={styles.formGroup}>
                       <label style={styles.label}>{group.plan}</label>
                       <input
-                        type="text"
+                        type={group.plan.includes("DATE") || group.plan.includes("PLAN") ? "date" : "text"}
                         name={group.plan}
-                        value={formData[group.plan] || ""}
+                        value={formatDateForInput(formData[group.plan])}
                         onChange={handleChange}
                         style={styles.input}
+                        disabled={loading}
                       />
                     </div>
                     <div style={styles.formGroup}>
                       <label style={styles.label}>{group.actual}</label>
                       <input
-                        type="text"
+                        type={group.actual.includes("DATE") || group.actual.includes("ACTUAL") ? "date" : "text"}
                         name={group.actual}
-                        value={formData[group.actual] || ""}
+                        value={formatDateForInput(formData[group.actual])}
                         onChange={handleChange}
                         style={{ ...styles.input, color: textColor, fontWeight: "bold" }}
+                        disabled={loading}
                       />
                     </div>
                   </div>
@@ -167,7 +256,6 @@ const Form = () => {
             </div>
           </div>
 
-          {/* Other fields */}
           {Object.keys(formData).filter(
             key => !readOnlyFields.includes(key) &&
                   !fieldGroups.some(group => group.plan === key || group.actual === key)
@@ -182,11 +270,12 @@ const Form = () => {
                     <div key={key} style={styles.formGroup}>
                       <label style={styles.label}>{key}</label>
                       <input
-                        type="text"
+                        type={key.includes("DATE") ? "date" : "text"}
                         name={key}
-                        value={formData[key] || ""}
+                        value={formatDateForInput(formData[key])}
                         onChange={handleChange}
                         style={styles.input}
+                        disabled={loading}
                       />
                     </div>
                   ))}
@@ -200,9 +289,12 @@ const Form = () => {
               style={styles.submitButton}
               disabled={loading}
             >
-              {loading ? "Updating..." : "Update"}
+              {loading ? (
+                <>
+                  <span style={styles.spinnerSmall}></span> Updating...
+                </>
+              ) : "Update"}
             </button>
-            {msg && <p style={styles.message}>{msg}</p>}
           </div>
         </form>
       </div>
@@ -401,6 +493,28 @@ const styles = {
     fontWeight: "600",
     cursor: "pointer",
     transition: "background-color 0.3s"
+  },
+  toast: {
+    position: "fixed",
+    top: "20px",
+    right: "20px",
+    padding: "15px 25px",
+    color: "white",
+    borderRadius: "4px",
+    boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
+    zIndex: 1000,
+    animation: "fadeIn 0.3s, fadeOut 0.3s 2.7s",
+  },
+  spinnerSmall: {
+    display: "inline-block",
+    width: "16px",
+    height: "16px",
+    border: "2px solid rgba(255,255,255,0.3)",
+    borderTop: "2px solid white",
+    borderRadius: "50%",
+    animation: "spin 1s linear infinite",
+    marginRight: "8px",
+    verticalAlign: "middle"
   }
 };
 
@@ -410,6 +524,20 @@ styleSheet.insertRule(`
   @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+  }
+`, styleSheet.cssRules.length);
+
+styleSheet.insertRule(`
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+`, styleSheet.cssRules.length);
+
+styleSheet.insertRule(`
+  @keyframes fadeOut {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(-20px); }
   }
 `, styleSheet.cssRules.length);
 
